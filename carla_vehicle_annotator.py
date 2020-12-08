@@ -521,20 +521,36 @@ def save_output(carla_img, bboxes, vehicle_class=None, old_bboxes=None, old_vehi
             os.makedirs(os.path.dirname(filename))
         image.save(filename)
 
+def setup_data_directory(json_path: str = 'vehicle_class.json', data_path: str = 'data/') -> [str, str]:
+
+    images_path: str = data_path + "images"
+    labels_path = data_path + "labels"
+    if not os.path.exists(labels_path):
+        os.makedirs(labels_path)
+        print(labels_path + ' directory did not exists, new directory created')
+
+    if not os.path.exists(images_path):
+        os.makedirs(images_path)
+        print(images_path + ' directory did not exists, new directory created')
+
+    # f = open(json_path)
+    # json_data = json.load(f)
+    # classes = json_data['reference']
+    # class_list: List[str] = [None] * len(classes)
+    # for c in classes:
+    #     class_list[classes[c]] = c
+
+    # with open(data_path + '/classes.txt', 'w') as class_file:
+    #     for c in class_list:
+    #         class_file.write(c + '\n')
+    #     class_file.close()
+
+    return images_path, labels_path
+
+
 ### Use this function to save bounding box result in darknet training format
-def save2darknet(bboxes, vehicle_class, carla_img, data_path = '', cc_rgb = carla.ColorConverter.Raw, save_train = False, customName=''):
-    # check whether target path exists
-    if customName != '':
-        customName = str(customName) + '_'
-    data_path = data_path + 'data/'
-    if not os.path.exists(os.path.dirname(data_path)):
-        os.makedirs(os.path.dirname(data_path))
-        print(data_path + ' directory did not exists, new directory created')
-    obj_path = data_path + 'obj/'
-    if not os.path.exists(os.path.dirname(obj_path)):
-        print(obj_path + ' directory did not exists, new directory created')
-        os.makedirs(os.path.dirname(obj_path))    
-    
+def save2darknet(bboxes, vehicle_class, carla_img, images_path: str, labels_path: str,
+                 cc_rgb = carla.ColorConverter.Raw, val_split: float = 0.75, save_train: bool = False):
     bbr = bboxes is not None
     vcr = vehicle_class is not None
     cir = carla_img is not None
