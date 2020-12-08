@@ -147,43 +147,19 @@ def main():
         SetAutopilot = carla.command.SetAutopilot
         FutureActor = carla.command.FutureActor
 
-        # --------------
-        # Spawn vehicles
-        # --------------
-        batch = []
-        for n, transform in enumerate(spawn_points):
-            if n >= args.number_of_vehicles:
-                break
-            blueprint = random.choice(blueprints)
-            if blueprint.has_attribute('color'):
-                color = random.choice(blueprint.get_attribute('color').recommended_values)
-                blueprint.set_attribute('color', color)
-            if blueprint.has_attribute('driver_id'):
-                driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
-                blueprint.set_attribute('driver_id', driver_id)
-            blueprint.set_attribute('role_name', 'autopilot')
-            batch.append(SpawnActor(blueprint, transform).then(SetAutopilot(FutureActor, True)))
-            spawn_points.pop(0)
+        images_path, labels_path = cva.setup_data_directory()
+        # endregion
 
-        for response in client.apply_batch_sync(batch, synchronous_master):
-            if response.error:
-                logging.error(response.error)
-            else:
-                vehicles_list.append(response.actor_id)
+        # region Spawn ego vehicle and sensors
 
-        print('Created %d npc vehicles \n' % len(vehicles_list))
-        
-        # -----------------------------
-        # Spawn ego vehicle and sensors
-        # -----------------------------
-        q_list = []
-        idx = 0
-        
-        tick_queue = queue.Queue()
+        q_list: List[Queue] = []
+        idx: int = 0
+
+        tick_queue: Queue = Queue()
         world.on_tick(tick_queue.put)
         q_list.append(tick_queue)
-        tick_idx = idx
-        idx = idx+1
+        tick_idx: int = idx
+        idx = idx + 1
 
         # Spawn ego vehicle
         ego_bp = random.choice(blueprints)
@@ -196,19 +172,19 @@ def main():
         # Spawn RGB camera
         cam_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
         cam_bp = world.get_blueprint_library().find('sensor.camera.rgb')
-        cam_bp.set_attribute('sensor_tick', str(tick_sensor))
+        cam_bp.set_attribute('sensor_tick', str(TICK_SENSOR))
         cam = world.spawn_actor(cam_bp, cam_transform, attach_to=ego_vehicle)
         nonvehicles_list.append(cam)
         cam_queue = queue.Queue()
         cam.listen(cam_queue.put)
         q_list.append(cam_queue)
         cam_idx = idx
-        idx = idx+1
+        idx = idx + 1
         print('RGB camera ready')
 
         # Spawn depth camera
         depth_bp = world.get_blueprint_library().find('sensor.camera.depth')
-        depth_bp.set_attribute('sensor_tick', str(tick_sensor))
+        depth_bp.set_attribute('sensor_tick', str(TICK_SENSOR))
         depth = world.spawn_actor(depth_bp, cam_transform, attach_to=ego_vehicle)
         cc_depth_log = carla.ColorConverter.LogarithmicDepth
         nonvehicles_list.append(depth)
@@ -216,13 +192,13 @@ def main():
         depth.listen(depth_queue.put)
         q_list.append(depth_queue)
         depth_idx = idx
-        idx = idx+1
+        idx = idx + 1
         print('Depth camera ready')
 
         # Spawn segmentation camera
-        if save_segm:
+        if SAVE_SEGM:
             segm_bp = world.get_blueprint_library().find('sensor.camera.semantic_segmentation')
-            segm_bp.set_attribute('sensor_tick', str(tick_sensor))
+            segm_bp.set_attribute('sensor_tick', str(TICK_SENSOR))
             segm_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
             segm = world.spawn_actor(segm_bp, segm_transform, attach_to=ego_vehicle)
             cc_segm = carla.ColorConverter.CityScapesPalette
@@ -231,13 +207,13 @@ def main():
             segm.listen(segm_queue.put)
             q_list.append(segm_queue)
             segm_idx = idx
-            idx = idx+1
+            idx = idx + 1
             print('Segmentation camera ready')
 
         # Spawn LIDAR sensor
-        if save_lidar:
+        if SAVE_LIDAR:
             lidar_bp = world.get_blueprint_library().find('sensor.lidar.ray_cast')
-            lidar_bp.set_attribute('sensor_tick', str(tick_sensor))
+            lidar_bp.set_attribute('sensor_tick', str(TICK_SENSOR))
             lidar_bp.set_attribute('channels', '64')
             lidar_bp.set_attribute('points_per_second', '1120000')
             lidar_bp.set_attribute('upper_fov', '30')
@@ -250,67 +226,285 @@ def main():
             lidar.listen(lidar_queue.put)
             q_list.append(lidar_queue)
             lidar_idx = idx
-            idx = idx+1
+            idx = idx + 1
             print('LIDAR ready')
+
+        # endregion
+
+        # region Spawn vehicles
+        batch = []
+        number_of_bikes = number_of_cars = number_of_motorbikes = int(math.ceil(args.number_of_vehicles * 0.25))
+        number_of_trucks = args.number_of_vehicles - number_of_bikes - number_of_cars - number_of_motorbikes
+        truck_blueprints = [blueprints.find("vehicle.tesla.cybertruck"), blueprints.find("vehicle.carlamotors.carlacola")]
+        car_blueprints_ids = [
+            "vehicle.citroen.c3",
+            "vehicle.chevrolet.impala",
+            "vehicle.audi.a2",
+            "vehicle.nissan.micra",
+            "vehicle.audi.tt",
+            "vehicle.bmw.grandtourer",
+            "vehicle.bmw.isetta",
+            "vehicle.dodge_charger.police",
+            "vehicle.jeep.wrangler_rubicon",
+            "vehicle.mercedes-benz.coupe",
+            "vehicle.mini.cooperst",
+            "vehicle.nissan.patrol",
+            "vehicle.seat.leon",
+            "vehicle.toyota.prius",
+            "vehicle.tesla.model3",
+            "vehicle.audi.etron",
+            "vehicle.volkswagen.t2",
+            "vehicle.lincoln.mkz2017",
+            "vehicle.mustang.mustang"
+        ]
+        car_blueprints = [blueprints.find(i) for i in car_blueprints_ids]
+        bike_blueprints_ids = [
+            "vehicle.bh.crossbike",
+            "vehicle.gazelle.omafiets",
+            "vehicle.diamondback.century"
+        ]
+        bike_blueprints = [blueprints.find(i) for i in bike_blueprints_ids]
+        motorbike_blueprints_ids = [
+            "vehicle.harley-davidson.low_rider",
+            "vehicle.yamaha.yzf",
+            "vehicle.kawasaki.ninja"
+        ]
+        motorbike_blueprints = [blueprints.find(i) for i in motorbike_blueprints_ids]
+
+        i = 0
+        for n in range(number_of_trucks):
+            blueprint = random.choice(truck_blueprints)
+            if blueprint.has_attribute('color'):
+                color = random.choice(blueprint.get_attribute('color').recommended_values)
+                blueprint.set_attribute('color', color)
+            if blueprint.has_attribute('driver_id'):
+                driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
+                blueprint.set_attribute('driver_id', driver_id)
+            blueprint.set_attribute('role_name', 'autopilot')
+            batch.append(SpawnActor(blueprint, spawn_points[i]).then(SetAutopilot(FutureActor, True)))
+            i += 1
+
+        for n in range(number_of_cars):
+            blueprint = random.choice(car_blueprints)
+            if blueprint.has_attribute('color'):
+                color = random.choice(blueprint.get_attribute('color').recommended_values)
+                blueprint.set_attribute('color', color)
+            if blueprint.has_attribute('driver_id'):
+                driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
+                blueprint.set_attribute('driver_id', driver_id)
+            blueprint.set_attribute('role_name', 'autopilot')
+            batch.append(SpawnActor(blueprint, spawn_points[i]).then(SetAutopilot(FutureActor, True)))
+            i += 1
+
+        for n in range(number_of_motorbikes):
+            blueprint = random.choice(motorbike_blueprints)
+            if blueprint.has_attribute('color'):
+                color = random.choice(blueprint.get_attribute('color').recommended_values)
+                blueprint.set_attribute('color', color)
+            if blueprint.has_attribute('driver_id'):
+                driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
+                blueprint.set_attribute('driver_id', driver_id)
+            blueprint.set_attribute('role_name', 'autopilot')
+            batch.append(SpawnActor(blueprint, spawn_points[i]).then(SetAutopilot(FutureActor, True)))
+            i += 1
+
+        for n in range(number_of_bikes):
+            blueprint = random.choice(bike_blueprints)
+            if blueprint.has_attribute('color'):
+                color = random.choice(blueprint.get_attribute('color').recommended_values)
+                blueprint.set_attribute('color', color)
+            if blueprint.has_attribute('driver_id'):
+                driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
+                blueprint.set_attribute('driver_id', driver_id)
+            blueprint.set_attribute('role_name', 'autopilot')
+            batch.append(SpawnActor(blueprint, spawn_points[i]).then(SetAutopilot(FutureActor, True)))
+            i += 1
+
+        for response in client.apply_batch_sync(batch, synchronous_master):
+            if response.error:
+                logging.error(response.error)
+            else:
+                vehicles_list.append(response.actor_id)
+
+        print('Created %d npc vehicles \n' % len(vehicles_list))
+        # endregion
+
+        # region Spawn Walkers
+
+        # some settings
+        percentagePedestriansRunning = 0.0  # how many pedestrians will run
+        percentagePedestriansCrossing = 0.0  # how many pedestrians will walk through the road
+        blueprintsWalkers = world.get_blueprint_library().filter("walker.pedestrian.*")
+        # 1. take all the random locations to spawn
+        spawn_points = []
+        for i in range(20):
+            spawn_point = carla.Transform()
+            loc = world.get_random_location_from_navigation()
+            if (loc != None):
+                spawn_point.location = loc
+                spawn_points.append(spawn_point)
+        # 2. we spawn the walker object
+        batch = []
+        walker_speed = []
+        for spawn_point in spawn_points:
+            walker_bp = random.choice(blueprintsWalkers)
+            # set as not invincible
+            if walker_bp.has_attribute('is_invincible'):
+                walker_bp.set_attribute('is_invincible', 'false')
+            # set the max speed
+            if walker_bp.has_attribute('speed'):
+                if (random.random() > percentagePedestriansRunning):
+                    # walking
+                    walker_speed.append(walker_bp.get_attribute('speed').recommended_values[1])
+                else:
+                    # running
+                    walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])
+            else:
+                print("Walker has no speed")
+                walker_speed.append(0.0)
+            batch.append(SpawnActor(walker_bp, spawn_point))
+        results = client.apply_batch_sync(batch, True)
+        walker_speed2 = []
+        for i in range(len(results)):
+            if results[i].error:
+                logging.error(results[i].error)
+            else:
+                walkers_list.append({"id": results[i].actor_id})
+                walker_speed2.append(walker_speed[i])
+        walker_speed = walker_speed2
+        # 3. we spawn the walker controller
+        batch = []
+        walker_controller_bp = world.get_blueprint_library().find('controller.ai.walker')
+        for i in range(len(walkers_list)):
+            batch.append(SpawnActor(walker_controller_bp, carla.Transform(), walkers_list[i]["id"]))
+        results = client.apply_batch_sync(batch, True)
+        for i in range(len(results)):
+            if results[i].error:
+                logging.error(results[i].error)
+            else:
+                walkers_list[i]["con"] = results[i].actor_id
+        # 4. we put altogether the walkers and controllers id to get the objects from their id
+        for i in range(len(walkers_list)):
+            all_id.append(walkers_list[i]["con"])
+            all_id.append(walkers_list[i]["id"])
+        all_actors = world.get_actors(all_id)
+
+        # wait for a tick to ensure client receives the last transform of the walkers we have just created
+        # if not args.sync or not synchronous_master:
+        #     world.wait_for_tick()
+        # else:
+        #     world.tick()
+
+        # 5. initialize each controller and set target to walk to (list is [controler, actor, controller, actor ...])
+        # set how many pedestrians can cross the road
+        world.set_pedestrians_cross_factor(percentagePedestriansCrossing)
+        for i in range(0, len(all_id), 2):
+            # start walker
+            all_actors[i].start()
+            # set walk to random point
+            all_actors[i].go_to_location(world.get_random_location_from_navigation())
+            # max speed
+            all_actors[i].set_max_speed(float(walker_speed[int(i / 2)]))
+        # endregion
 
         # Begin the loop
         time_sim = 0
-        while True:
+        images_captured: int = 0
+        time_limit_reached: bool = False
+        while images_captured < args.max_images and not time_limit_reached:
             # Extract the available data
-            nowFrame = world.tick()
+            now_frame = world.tick()
 
             # Check whether it's time to capture data
-            if time_sim >= tick_sensor:
-                data = [retrieve_data(q,nowFrame) for q in q_list]
-                assert all(x.frame == nowFrame for x in data if x is not None)
+            if time_sim >= TICK_SENSOR:
+
+                
+                minutes_passed = (datetime.now() - start_time).total_seconds() / 60
+                if minutes_passed >= args.max_time:
+                    time_limit_reached = True
+
+                data = [retrieve_data(q, now_frame) for q in q_list]
+                assert all(x.frame == now_frame for x in data if x is not None)
 
                 # Skip if any sensor data is not available
                 if None in data:
                     continue
-                
-                vehicles_raw = world.get_actors().filter('vehicle.*')
+
+                # vehicles_raw = world.get_actors().filter('vehicle.*')
+                all_actors = world.get_actors()
+                vehicles_raw = []
+                for actor in all_actors:
+                    if actor.type_id.startswith('walker.pedestrian') or actor.type_id.startswith('vehicle'):
+                        vehicles_raw.append(actor)
+
+                # vehicles_raw = world.get_actors().filter('walker.pedestrian.*')
                 snap = data[tick_idx]
                 rgb_img = data[cam_idx]
                 depth_img = data[depth_idx]
-                
+
                 # Attach additional information to the snapshot
                 vehicles = cva.snap_processing(vehicles_raw, snap)
 
                 # Save depth image, RGB image, and Bounding Boxes data
-                if save_depth:
+                if SAVE_DEPTH:
                     depth_img.save_to_disk('out_depth/%06d.png' % depth_img.frame, cc_depth_log)
                 depth_meter = cva.extract_depth(depth_img)
-                filtered, removed =  cva.auto_annotate(vehicles, cam, depth_meter, json_path='vehicle_class_json_file.txt')
-                cva.save_output(rgb_img, filtered['bbox'], filtered['class'], removed['bbox'], removed['class'], save_patched=True, out_format='json')
-                
-                # Uncomment if you want to save the data in darknet format
-                #cva.save2darknet(filtered['bbox'], filtered['class'], rgb_img)
+                filtered, removed = cva.auto_annotate(vehicles, cam, depth_meter, max_dist=50,
+                                                      json_path='vehicle_class_carla.json')
+                bboxes = filtered['bbox']
+                classes = filtered['class']
+                big_enough_bboxes = []
+                filtered_classes = []
+                for b, c in zip(bboxes, classes):
+                    # Dict with:
+                    # bbox: [[min_x, min_y], [max_x, max_y]]
+                    # vehicles
+                    x1 = b[0][0]
+                    x2 = b[1][0]
+                    y1 = b[0][1]
+                    y2 = b[1][1]
+                    delta_x = x1 - x2 if x1 > x2 else x2 - x1
+                    delta_y = y1 - y2 if y1 > y2 else y2 - y1
+                    area: float = delta_x * delta_y
 
-                # Save segmentation image
-                if save_segm:
-                    segm_img = data[segm_idx]
-                    segm_img.save_to_disk('out_segm/%06d.png' % segm_img.frame, cc_segm)
+                    if area > 350:
+                        big_enough_bboxes.append(b)
+                        filtered_classes.append(c)
 
-                # Save LIDAR data
-                if save_lidar:
-                    lidar_data = data[lidar_idx]
-                    lidar_data.save_to_disk('out_lidar/%06d.ply' % segm_img.frame)
+                if len(big_enough_bboxes) > 0:
+                    images_captured += 1
+                    if images_captured % 10 == 0:
+                        print(f"Captured {images_captured}/{args.max_images} in {math.ceil(minutes_passed)} minutes")
+
+                    cva.save_output(rgb_img, big_enough_bboxes, filtered_classes, removed['bbox'], removed['class'], save_patched=True, out_format='json')
+                    cva.save2darknet(bboxes=big_enough_bboxes, vehicle_class=filtered_classes, carla_img=rgb_img, save_train=True, images_path=images_path, labels_path=labels_path)
+
+                    # Save segmentation image
+                    if SAVE_SEGM:
+                        segm_img = data[segm_idx]
+                        segm_img.save_to_disk('out_segm/%06d.png' % segm_img.frame, cc_segm)
+
+                    # Save LIDAR data
+                    if SAVE_LIDAR:
+                        lidar_data = data[lidar_idx]
+                        lidar_data.save_to_disk('out_lidar/%06d.ply' % segm_img.frame)
                 
+
                 time_sim = 0
             time_sim = time_sim + settings.fixed_delta_seconds
 
     finally:
-        cva.save2darknet(None,None,None,save_train=True)
+        # cva.save2darknet(None, None, None, save_train=True)
         try:
             cam.stop()
             depth.stop()
-            if save_segm:
+            if SAVE_SEGM:
                 segm.stop()
-            if save_lidar:
+            if SAVE_LIDAR:
                 lidar.stop()
         except:
             print("Simulation ended before sensors have been created")
-        
+
         settings = world.get_settings()
         settings.synchronous_mode = False
         settings.fixed_delta_seconds = None
@@ -321,6 +515,13 @@ def main():
 
         print('destroying %d nonvehicles' % len(nonvehicles_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in nonvehicles_list])
+
+        # stop walker controllers (list is [controller, actor, controller, actor ...])
+        # for i in range(0, len(all_id), 2):
+        #     all_actors[i].stop()
+
+        print('\ndestroying %d walkers' % len(walkers_list))
+        client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
 
         time.sleep(0.5)
 
