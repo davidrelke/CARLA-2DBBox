@@ -1,55 +1,64 @@
-### Example program to save several sensor data including bounding box
-### Sensors: RGB Camera (+BoundingBox), De[th Camera, Segmentation Camera, Lidar Camera
-### By Mukhlas Adib
-### 2020
-### Last tested on CARLA 0.9.10.1
+# Example program to save several sensor data including bounding box
+# Sensors: RGB Camera (+BoundingBox), De[th Camera, Segmentation Camera, Lidar Camera
+# By Mukhlas Adib
+# 2020
+# Last tested on CARLA 0.9.10.1
 
-### CARLA Simulator is licensed under the terms of the MIT license
-### For a copy, see <https://opensource.org/licenses/MIT>
-### For more information about CARLA Simulator, visit https://carla.org/
+# CARLA Simulator is licensed under the terms of the MIT license
+# For a copy, see <https://opensource.org/licenses/MIT>
+# For more information about CARLA Simulator, visit https://carla.org/
 
-import glob
-import os
 import sys
 import time
-
-try:
-    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-except IndexError:
-    print('carla not found')
-    pass
-
-import carla
-
 import argparse
 import logging
 import random
 import queue
-import numpy as np
-from matplotlib import pyplot as plt
-import cv2
+import math
+import psutil
+
+from queue import Queue
+from datetime import datetime
+from subprocess import Popen
+from typing import List
+# pylint: disable= no-name-in-module
+from win32process import DETACHED_PROCESS
+
+try:
+    # sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
+    #     sys.version_info.major,
+    #     sys.version_info.minor,
+    #     'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+    sys.path.append("C:/Studium/DLVR/CARLA/PythonAPI/carla/dist/carla-0.9.10-py3.7-win-amd64.egg")
+except IndexError:
+    print('carla not found')
+# pylint: disable= import-error, wrong-import-position
+# noinspection PyUnresolvedReferences
+import carla
 import carla_vehicle_annotator as cva
+
 
 def retrieve_data(sensor_queue, frame, timeout=5):
     while True:
         try:
-            data = sensor_queue.get(True,timeout)
+            data = sensor_queue.get(True, timeout)
         except queue.Empty:
             return None
         if data.frame == frame:
             return data
 
-save_rgb = True
-save_depth = False
-save_segm = False
-save_lidar = False
-tick_sensor = 1
+
+SAVE_RGB = True
+SAVE_DEPTH = False
+SAVE_SEGM = False
+SAVE_LIDAR = False
+TICK_SENSOR = 1
+
+all_id = []
+walkers_list = []
+
 
 def main():
-
     argparser = argparse.ArgumentParser(
         description=__doc__)
     argparser.add_argument(
