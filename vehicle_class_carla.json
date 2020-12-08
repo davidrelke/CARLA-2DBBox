@@ -1,10 +1,11 @@
 {
     "reference": {
+        "others": 80,
         "passenger_car": 0,
         "truck": 1,
         "motorcycle": 2,
         "bicycle": 3,
-	"others":9
+        "person": 4
     },
     "classification": {
         "vehicle.citroen.c3": 0,
@@ -33,6 +34,7 @@
         "vehicle.audi.etron": 0,
         "vehicle.volkswagen.t2": 0,
         "vehicle.lincoln.mkz2017": 0,
-        "vehicle.mustang.mustang": 0
+        "vehicle.mustang.mustang": 0,
+        "walker.pedestrian": 4
     }
 }
