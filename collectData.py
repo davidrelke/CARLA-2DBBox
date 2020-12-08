@@ -533,4 +533,9 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
+        for proc in psutil.process_iter():
+            # check whether the process to kill name matches
+            if proc.name() == "CarlaUE4-Win64-Shipping.exe":
+                proc.kill()
+                break
         print('\ndone.')
