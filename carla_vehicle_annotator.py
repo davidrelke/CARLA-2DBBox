@@ -437,7 +437,12 @@ def get_vehicle_class(vehicles, json_path=None):
     other_class = json_data["reference"].get('others')
     class_list = []
     for v in vehicles:
-        v_class = int(vehicles_data.get(v.type_id, other_class))
+        # Pedestrians have a type_id like 'walker.pedestrian.0011'
+        type_id: str = v.type_id
+        if type_id.startswith("walker.pedestrian."):
+            type_id = "walker.pedestrian"
+
+        v_class = int(vehicles_data.get(type_id, other_class))
         class_list.append(v_class)
     return class_list
 
