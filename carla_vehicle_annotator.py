@@ -11,6 +11,7 @@
 ### For more information about CARLA Simulator, visit https://carla.org/
 
 import numpy as np
+import random
 import PIL
 from PIL import Image
 from PIL import ImageDraw
@@ -498,17 +499,7 @@ def save_output(carla_img, bboxes, vehicle_class=None, old_bboxes=None, old_vehi
         with open(filename, 'w') as outfile:
             json.dump(out_dict, outfile, indent=4)     
 
-    if save_patched:
-        carla_img.convert(cc_rgb)
-        img_bgra = np.array(carla_img.raw_data).reshape((carla_img.height,carla_img.width,4))
-        img_rgb = np.zeros((carla_img.height,carla_img.width,3))
-
-        img_rgb[:,:,0] = img_bgra[:,:,2]
-        img_rgb[:,:,1] = img_bgra[:,:,1]
-        img_rgb[:,:,2] = img_bgra[:,:,0]
-        img_rgb = np.uint8(img_rgb)
-        image = Image.fromarray(img_rgb, 'RGB')
-        img_draw = ImageDraw.Draw(image)  
+    if save_patched: 
         for crop in bboxes:
             u1 = int(crop[0,0])
             v1 = int(crop[0,1])
@@ -564,8 +555,8 @@ def save2darknet(bboxes, vehicle_class, carla_img, images_path: str, labels_path
         img_rgb[:,:,2] = img_bgra[:,:,0]
         img_rgb = np.uint8(img_rgb)
         image = Image.fromarray(img_rgb, 'RGB')
-        #os.makedirs(os.path.dirname(obj_path + '/%06d.jpg' % carla_img.frame))
-        image.save(obj_path + '/' + str(customName) + '%06d.jpg' % carla_img.frame)
+        image_file_path = images_path + "/" + '%06d.jpg' % carla_img.frame
+        image.save(image_file_path)
         
         # save bounding box data
         datastr = ''
@@ -575,23 +566,18 @@ def save2darknet(bboxes, vehicle_class, carla_img, images_path: str, labels_path
             w = (box[1,0] - box[0,0]) / carla_img.width
             h = (box[1,1] - box[0,1]) / carla_img.height
             datastr = datastr + f"{v_class} {uc} {vc} {w} {h} \n"
-        with open(obj_path + '/' + str(customName) + '%06d.txt' % carla_img.frame, 'w') as filetxt:
+        with open(labels_path + '/' + '%06d.txt' % carla_img.frame, 'w') as filetxt:
             filetxt.write(datastr)
             filetxt.close()
-            
-    # save train.txt
-    if save_train:
-        img_list = glob.glob(obj_path + '/*.jpg')
-        if len(img_list) == 0:
-            print('no image found')
-        else:
-            trainstr = ''
-            for imgname in img_list:
-                trainstr = trainstr + imgname + '\n'
-            trainstr = trainstr.replace('\\','/')
-            with open(data_path + '/train.txt', 'w') as filetxt:
-                filetxt.write(trainstr)
-                filetxt.close()
+
+        if save_train:
+            goes_to_train = random.randrange(100) < val_split * 100
+            if goes_to_train:
+                with open(images_path + '/../train.txt', 'a+') as train_file:
+                    train_file.write(image_file_path + "\n")
+            else:
+                with open(images_path + '/../val.txt', 'a+') as val_file:
+                    val_file.write(image_file_path + "\n")
 
 ### Use this function to convert depth image (carla.Image) to a depth map in meter
 def extract_depth(depth_img):
