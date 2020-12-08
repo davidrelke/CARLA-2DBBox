@@ -455,13 +455,29 @@ def get_vehicle_class(vehicles, json_path=None):
 
 ### Use this function to save the rgb image (with and without bounding box) and bounding boxes data 
 def save_output(carla_img, bboxes, vehicle_class=None, old_bboxes=None, old_vehicle_class=None, cc_rgb=carla.ColorConverter.Raw, path='', save_patched=False, add_data=None, out_format='pickle'):
-    carla_img.save_to_disk(path + 'out_rgb/%06d.png' % carla_img.frame, cc_rgb)
+    # carla_img.save_to_disk(path + 'out_rgb/%06d.png' % carla_img.frame, cc_rgb)
+
+    carla_img.convert(cc_rgb)
+    img_bgra = np.array(carla_img.raw_data).reshape((carla_img.height,carla_img.width,4))
+    img_rgb = np.zeros((carla_img.height,carla_img.width,3))
+    img_rgb[:,:,0] = img_bgra[:,:,2]
+    img_rgb[:,:,1] = img_bgra[:,:,1]
+    img_rgb[:,:,2] = img_bgra[:,:,0]
+    img_rgb = np.uint8(img_rgb)
+    image = Image.fromarray(img_rgb, 'RGB')
+    img_draw = ImageDraw.Draw(image)
+
+    filename = path + 'out_rgb/%06d.png' % carla_img.frame
+
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
+    image.save(filename)
 
     out_dict = {}
     bboxes_list = [bbox.tolist() for bbox in bboxes]
-    out_dict['bboxes'] = bboxes_list
+    out_dict['bboxes'] = bboxes_list # Get bboxes here
     if vehicle_class is not None:
-        out_dict['vehicle_class'] = vehicle_class
+        out_dict['vehicle_class'] = vehicle_class # Get Class here
     if old_bboxes is not None:
         old_bboxes_list = [bbox.tolist() for bbox in old_bboxes]
         out_dict['removed_bboxes'] = old_bboxes_list
