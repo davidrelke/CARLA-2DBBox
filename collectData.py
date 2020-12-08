@@ -77,28 +77,49 @@ def main():
         metavar='N',
         default=50,
         type=int,
-        help='number of vehicles (default: 10)')
+        help='number of vehicles (default: 50)')
     argparser.add_argument(
         '-tm_p', '--tm_port',
         metavar='P',
         default=8000,
         type=int,
         help='port to communicate with TM (default: 8000)')
+    argparser.add_argument(
+        '-ec', '--start_carla',
+        default=False,
+        type=bool,
+        help='Start and end CARLA automatically')
+    argparser.add_argument(
+        '-mi', '--max_images',
+        default=2_000,
+        type=int,
+        help='Number of images captured before the script ends')
+    argparser.add_argument(
+        '-mt', '--max_time',
+        default=30,
+        type=int,
+        help='Minutes before the script ends')
 
     args = argparser.parse_args()
-    
+
+    if args.start_carla:
+        _ = Popen([r'C:\Studium\DLVR\\CARLA\\CarlaUE4.exe'], creationflags=DETACHED_PROCESS).pid
+        time.sleep(5)
+
     vehicles_list = []
     nonvehicles_list = []
     client = carla.Client(args.host, args.port)
     client.set_timeout(10.0)
 
+    start_time = datetime.now()
+
     try:
 
+        # region setup
         traffic_manager = client.get_trafficmanager(args.tm_port)
         traffic_manager.set_global_distance_to_leading_vehicle(2.0)
         world = client.get_world()
 
- 
         print('\nRUNNING in synchronous mode\n')
         settings = world.get_settings()
         traffic_manager.set_synchronous_mode(True)
