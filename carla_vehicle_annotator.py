@@ -486,7 +486,7 @@ def save_output(carla_img, bboxes, vehicle_class=None, old_bboxes=None, old_vehi
     if add_data is not None:
         out_dict['others'] = add_data
     if out_format=='json':
-        filename = path + 'out_bbox/%06d.txt' % carla_img.frame
+        filename = path + 'out_bbox/%06d.json' % carla_img.frame
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         with open(filename, 'w') as outfile:
